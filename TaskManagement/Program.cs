@@ -10,32 +10,33 @@ using TaskManagement.Services;
 
 // --- 1. بناء التطبيق ---
 var builder = WebApplication.CreateBuilder(args);
-//
-builder.Services.AddProblemDetails();
 
 // --- 2. إضافة الخدمات (Services) إلى حاوية Dependency Injection ---
 
-// 2.1 تسجيل DbContext الخاص بقاعدة البيانات (ربط السيرفر)
+// 2.1 تسجيل DbContext باستخدام SQLite (بدلاً من SQL Server)
+// سلسلة الاتصال موجودة في appsettings.json تحت "DefaultConnection"
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// 2.2 إضافة الـ Controllers (جعل الـ API يعمل)
+// 2.2 إضافة الـ Controllers
 builder.Services.AddControllers();
-// تسجيل معالج الأخطاء العالمي
+
+// 2.3 تسجيل معالج الأخطاء العالمي
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
-// تسجيل الخدمات (Services) في حاوية Dependency Injection
+
+// 2.4 تسجيل الخدمات (Dependency Injection)
 builder.Services.AddScoped<IWeekService, WeekService>();
 builder.Services.AddScoped<ITaskService, TaskService>();
 
-// 2.3 إضافة خدمة Swagger (صفحة توثيق الـ API التي تختبر منها)
+// 2.5 إضافة خدمة Swagger (توثيق الـ API)
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// 2.4 تفعيل FluentValidation للتحقق من صحة البيانات القادمة من المستخدم
+// 2.6 تفعيل FluentValidation للتحقق من صحة البيانات
 builder.Services.AddFluentValidationAutoValidation()
                 .AddValidatorsFromAssembly(Assembly.GetExecutingAssembly());
 
-// --- 3. بناء التطبيق (تنفيذ البناء) ---
+// --- 3. بناء التطبيق ---
 var app = builder.Build();
 
 // --- 4. إعداد خط أنابيب معالجة الطلبات (Middleware) ---
@@ -50,23 +51,27 @@ if (app.Environment.IsDevelopment())
 // 4.2 إعادة توجيه طلبات HTTP إلى HTTPS
 app.UseHttpsRedirection();
 
-// 4.3 تفعيل نظام المصادقة (حتى لو لم نفعله الآن، نضعه تحسباً للمستقبل)
+// 4.3 تفعيل نظام المصادقة (تحسباً للمستقبل)
 app.UseAuthorization();
 
-// تفعيل خدمة الملفات الثابتة (لكي نتمكن من عرض ملفات HTML و CSS و JS من مجلد wwwroot)
+// 4.4 تفعيل خدمة الملفات الثابتة (لخدمة ملفات HTML, CSS, JS من مجلد wwwroot)
 app.UseStaticFiles();
 
-// تفعيل معالج الأخطاء العالمي (يجب أن يأتي قبل MapControllers)
+// 4.5 تفعيل معالج الأخطاء العالمي (يجب أن يكون قبل MapControllers)
 app.UseExceptionHandler();
-// 4.4 تحديد مسارات الـ Controllers
+
+// 4.6 تحديد مسارات الـ Controllers
 app.MapControllers();
 
-// --- 5. إضافة البيانات الأولية (Seed Data) لقاعدة البيانات ---
-// تتأكد من وجود أسباب الفشل الأساسية في قاعدة البيانات منذ البداية
+// --- 5. إعداد قاعدة البيانات والبيانات الأولية (Seed Data) ---
 using (var scope = app.Services.CreateScope())
 {
-    // الحصول على نسخة من DbContext للتعامل مع قاعدة البيانات
+    // الحصول على نسخة من DbContext
     var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+    // ✅ التأكد من وجود قاعدة البيانات والجداول (لـ SQLite)
+    // هذا الأمر ينشئ الملف (.db) والجداول إذا لم تكن موجودة مسبقاً
+    dbContext.Database.EnsureCreated();
 
     // التحقق: هل جدول أسباب الفشل فارغ؟ (أي لا يحتوي على أي بيانات)
     if (!dbContext.FailureReasons.Any())
@@ -87,9 +92,6 @@ using (var scope = app.Services.CreateScope())
         Console.WriteLine("✅ تم إضافة أسباب الفشل الخمسة إلى قاعدة البيانات بنجاح.");
     }
 }
-
-
-app.UseExceptionHandler();
 
 // --- 6. تشغيل التطبيق ---
 app.Run();
