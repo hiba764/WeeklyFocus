@@ -11,72 +11,69 @@ using TaskManagement.Services;
 // --- 1. بناء التطبيق ---
 var builder = WebApplication.CreateBuilder(args);
 
-// --- 2. إضافة الخدمات (Services) إلى حاوية Dependency Injection ---
+// --- 2. إضافة الخدمات ---
 
-// 2.1 تسجيل DbContext باستخدام SQLite (بدلاً من SQL Server)
-// سلسلة الاتصال موجودة في appsettings.json تحت "DefaultConnection"
+// 2.1 تسجيل DbContext باستخدام SQLite
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // 2.2 إضافة الـ Controllers
 builder.Services.AddControllers();
 
-// 2.3 تسجيل معالج الأخطاء العالمي
+// 2.3 تسجيل معالج الأخطاء العالمي (هام جداً)
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+builder.Services.AddProblemDetails(); // هذا يضمن توليد ProblemDetails
 
-// 2.4 تسجيل الخدمات (Dependency Injection)
+// 2.4 تسجيل الخدمات
 builder.Services.AddScoped<IWeekService, WeekService>();
 builder.Services.AddScoped<ITaskService, TaskService>();
 
-// 2.5 إضافة خدمة Swagger (توثيق الـ API)
+// 2.5 إضافة Swagger
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// 2.6 تفعيل FluentValidation للتحقق من صحة البيانات
+// 2.6 تفعيل FluentValidation
 builder.Services.AddFluentValidationAutoValidation()
                 .AddValidatorsFromAssembly(Assembly.GetExecutingAssembly());
 
 // --- 3. بناء التطبيق ---
 var app = builder.Build();
 
-// --- 4. إعداد خط أنابيب معالجة الطلبات (Middleware) ---
+// --- 4. إعداد خط أنابيب معالجة الطلبات ---
 
-// 4.1 تشغيل صفحة Swagger فقط في بيئة التطوير (وهذا ما أنت فيه)
+// 4.1 تشغيل Swagger في بيئة التطوير
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
 
-// 4.2 إعادة توجيه طلبات HTTP إلى HTTPS
+// 4.2 إعادة توجيه HTTPS
 app.UseHttpsRedirection();
 
-// 4.3 تفعيل نظام المصادقة (تحسباً للمستقبل)
+// 4.3 تفعيل المصادقة
 app.UseAuthorization();
 
-// 4.4 تفعيل خدمة الملفات الثابتة (لخدمة ملفات HTML, CSS, JS من مجلد wwwroot)
+// 4.4 تفعيل الملفات الثابتة (wwwroot)
 app.UseStaticFiles();
 
-// 4.5 تفعيل معالج الأخطاء العالمي (يجب أن يكون قبل MapControllers)
+// 4.5 تفعيل معالج الأخطاء العالمي (سطر واحد فقط، بدون معاملات)
 app.UseExceptionHandler();
 
 // 4.6 تحديد مسارات الـ Controllers
 app.MapControllers();
 
-// --- 5. إعداد قاعدة البيانات والبيانات الأولية (Seed Data) ---
+// --- 5. إعداد قاعدة البيانات والبيانات الأولية ---
 using (var scope = app.Services.CreateScope())
 {
-    // الحصول على نسخة من DbContext
     var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-    // ✅ التأكد من وجود قاعدة البيانات والجداول (لـ SQLite)
-    // هذا الأمر ينشئ الملف (.db) والجداول إذا لم تكن موجودة مسبقاً
+    // إنشاء قاعدة البيانات والجداول (لـ SQLite)
     dbContext.Database.EnsureCreated();
 
-    // التحقق: هل جدول أسباب الفشل فارغ؟ (أي لا يحتوي على أي بيانات)
+    // إضافة أسباب الفشل إذا لم تكن موجودة
     if (!dbContext.FailureReasons.Any())
     {
-        // إضافة الأسباب الخمسة الرئيسية التي تظهر في شاشة المستخدم
         dbContext.FailureReasons.AddRange(
             new FailureReason { Reason = "نسيت" },
             new FailureReason { Reason = "لم يكن لدي وقت" },
@@ -84,11 +81,7 @@ using (var scope = app.Services.CreateScope())
             new FailureReason { Reason = "فقدت الحماس" },
             new FailureReason { Reason = "سبب آخر" }
         );
-
-        // حفظ التغييرات في قاعدة البيانات (إدراج السجلات)
         dbContext.SaveChanges();
-
-        // طباعة رسالة نجاح في نافذة الإخراج (Console)
         Console.WriteLine("✅ تم إضافة أسباب الفشل الخمسة إلى قاعدة البيانات بنجاح.");
     }
 }
